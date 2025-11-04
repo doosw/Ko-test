@@ -1,0 +1,262 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+// 아직 실험적인 단계의 Material3 API를 명시적으로 사용하겠다는 선언
+// OptIn 어노테이션을 통해 컴파일러 경고를 방지하고 해당 API 기능 사용 허용
+
+package com.example.kotest
+// 현재 Kotlin 파일이 속한 애플리케이션 패키지 이름을 지정
+// AndroidManifest.xml에 정의된 동일한 패키지 경로와 일치해야 함
+
+// Android 기본 라이프사이클과 Compose 관련 필수 import
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.* 
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.kotest.ui.theme.KoTestTheme
+// 프로젝트 내부의 테마 설정 import (색상, 폰트, 스타일 등)
+
+// 메인 진입점인 Activity 클래스 정의
+class MainActivity : ComponentActivity() {
+    // 액티비티 생명주기 함수 onCreate: 앱 시작 시 호출되는 첫 함수
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        //savedInstanceState => 화면 전환 시 초기화 막는 용도
+        enableEdgeToEdge()
+        // 상태바 및 내비게이션 바를 투명하게 하여 전체 화면을 앱 UI가 차지하도록 함
+
+        setContent {
+            // setContent: XML이 아닌 Compose 기반으로 UI를 구성할 때 사용\
+
+            KoTestTheme {
+                // 전체 화면에 앱 전용 테마 적용
+
+                val navController = rememberNavController()
+                // 화면 간 이동을 제어하는 NavController 객체를 생성
+                // remember로 구성요소 재컴포지션 시에도 상태 유지
+
+                val posts = remember { mutableStateListOf<Post>() }
+                // 게시글 데이터를 담는 상태 리스트 (mutableStateListOf)
+                // 리스트가 변경되면 Compose가 자동으로 UI를 다시 그림
+
+                // NavHost: 앱의 화면 전환 구조를 정의하는 루트 컴포넌트
+                NavHost(
+                    navController = navController,
+                    startDestination = "board" // 첫 시작 화면 지정
+                ) {
+                    // composable은 특정 경로(route)에 해당하는 화면 정의
+                    composable("board") { BoardScreen(navController, posts) }
+                    // 게시판 화면
+                    composable("write") { WriteScreen(navController, posts) }
+                    // 글쓰기 화면
+
+                    // 게시물 상세보기 화면: "detail/{index}" 경로 패턴 사용
+                    composable("detail/{index}") { backStack ->
+                        // backStack.arguments를 통해 경로 매개변수 접근
+                        val index = backStack.arguments?.getString("index")?.toIntOrNull() ?: 0
+                        // 문자열로 전달된 index를 정수로 변환, 실패 시 0으로 대체
+                        DetailScreen(navController, posts[index])
+                        // 선택된 게시물 객체를 전달하여 상세 화면 구성
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 게시판 화면: 등록된 모든 게시글의 제목 목록을 보여주는 컴포저블
+@Composable
+fun BoardScreen(navController: NavHostController, posts: List<Post>) {
+    // Scaffold: 기본 화면 레이아웃 구조를 제공 (상단바, 하단바, FAB 포함 가능)
+    Scaffold(
+        floatingActionButton = {
+            // 화면 우측 하단에 표시되는 Floating Action Button 정의
+            FloatingActionButton(
+                onClick = { navController.navigate("write") },
+                // 버튼 클릭 시 글쓰기 화면으로 이동
+                containerColor = MaterialTheme.colorScheme.primary
+                // 버튼 배경색은 현재 테마의 primary 색상 사용
+            ) {
+                Text("+") // 버튼 내부에 '+' 텍스트 표시
+            }
+        }
+    ) { inner ->
+        // Scaffold의 content 영역 내부 정의
+        Column(
+            Modifier
+                .padding(inner)
+                // Scaffold에서 제공하는 기본 padding 적용 (상단바 영역 등)
+                .padding(16.dp)
+                // 추가적인 외부 여백 지정
+                .fillMaxSize()
+                // 세로·가로 방향으로 화면 전체 차지
+        ) {
+            Text("게시판", style = MaterialTheme.typography.titleLarge)
+            // 화면 상단 제목 표시
+            Spacer(Modifier.height(8.dp))
+            // 제목과 목록 사이 간격 확보
+
+            // LazyColumn: 스크롤 가능한 세로 목록 (RecyclerView와 유사)
+            LazyColumn(Modifier.weight(1f)) {
+                // itemsIndexed: 각 아이템의 index와 데이터를 함께 제공
+                itemsIndexed(posts) { index, post ->
+                    // 게시물 제목을 클릭 가능한 버튼 형태로 표시
+                    TextButton(
+                        onClick = { navController.navigate("detail/$index") },
+                        // 클릭 시 해당 index를 포함한 경로로 이동
+                        modifier = Modifier.fillMaxWidth()
+                        // 버튼의 너비를 화면 전체로 설정
+                    ) {
+                        Text(
+                            post.title,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        // 게시글 제목 표시
+                    }
+                    Divider()
+                    // 각 게시물 사이를 구분하기 위한 선 추가
+                }
+            }
+        }
+    }
+}
+
+// 글쓰기 화면: 사용자가 제목과 내용을 입력하고 저장할 수 있는 UI
+@Composable
+fun WriteScreen(navController: NavHostController, posts: MutableList<Post>) {
+    var title by remember { mutableStateOf(TextFieldValue("")) }
+    // 제목 입력 필드의 상태를 관리 (TextFieldValue는 텍스트와 커서 정보 포함)
+    var content by remember { mutableStateOf(TextFieldValue("")) }
+    // 내용 입력 필드의 상태를 관리
+
+    Scaffold(
+        topBar = {
+            // 화면 상단바 구성
+            TopAppBar(
+                title = { Text("새 글 작성") },
+                // 상단바 중앙 텍스트
+                navigationIcon = {
+                    // 상단 왼쪽에 뒤로가기 버튼 추가
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        // popBackStack()은 이전 화면으로 되돌아감
+                        Text("←")
+                        // 아이콘 대신 단순한 텍스트 화살표 사용
+                    }
+                }
+            )
+        }
+    ) { inner ->
+        // Scaffold 본문 영역
+        Column(
+            Modifier
+                .padding(inner)
+                .padding(16.dp)
+                .fillMaxSize()
+        ) {
+            // 제목 입력 필드
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                // 입력 시 상태값 갱신
+                label = { Text("제목") },
+                // 필드 위에 표시되는 라벨 텍스트
+                modifier = Modifier.fillMaxWidth()
+                // 필드의 너비를 전체로 설정
+            )
+
+            Spacer(Modifier.height(8.dp))
+            // 제목과 본문 입력칸 사이 여백 추가
+
+            // 본문 입력 필드
+            OutlinedTextField(
+                value = content,
+                onValueChange = { content = it },
+                label = { Text("내용") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                // 세로 길이 150dp로 고정
+            )
+
+            Spacer(Modifier.height(12.dp))
+            // 입력 영역과 버튼 사이 간격
+
+            // 저장 버튼
+            Button(
+                onClick = {
+                    // 버튼 클릭 시 실행되는 로직
+                    if (title.text.isNotBlank() && content.text.isNotBlank()) {
+                        // 제목과 내용이 공백이 아닐 경우에만 저장
+                        posts.add(Post(title.text, content.text))
+                        // 새 게시물을 리스트에 추가
+                        navController.popBackStack()
+                        // 게시판 화면으로 되돌아감
+                    }
+                }
+            ) {
+                Text("저장")
+                // 버튼 내부의 텍스트
+            }
+        }
+    }
+}
+
+// 게시글 상세보기 화면: 특정 게시물의 제목과 내용을 표시
+@Composable
+fun DetailScreen(navController: NavHostController, post: Post) {
+    Scaffold(
+        topBar = {
+            // 상단바 구성
+            TopAppBar(
+                title = { Text(post.title) },
+                // 상단 중앙에 현재 게시물의 제목 표시
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        // 뒤로가기 버튼 클릭 시 이전 화면으로 복귀
+                        Text("←")
+                    }
+                }
+            )
+        }
+    ) { inner ->
+        // Scaffold 본문 영역 정의
+        Column(
+            Modifier
+                .padding(inner)
+                .padding(16.dp)
+                .fillMaxSize()
+        ) {
+            // 제목 표시
+            Text(
+                post.title,
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            Spacer(Modifier.height(12.dp))
+            // 제목과 본문 사이 여백
+
+            // 본문 내용 표시
+            Text(
+                post.content,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+}
+
+// 게시물 데이터 구조 정의
+data class Post(val title: String, val content: String)
+// 게시물 한 개를 표현하는 데이터 클래스
+// title: 게시물 제목, content: 게시물 본문
+// Kotlin의 data class는 equals(), hashCode(), toString()을 자동 생성함
